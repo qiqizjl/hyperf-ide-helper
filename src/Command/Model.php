@@ -395,7 +395,7 @@ class Model extends Command
                         $args       = $this->getParameters($reflection);
                         //Remove the first ($query) argument
                         array_shift($args);
-                        $this->setMethod($name, '\Illuminate\Database\Eloquent\Builder|\\' . $reflection->class, $args);
+                        $this->setMethod($name, '\Hyperf\Database\Model\Builder|\\' . $reflection->class, $args);
                     }
                 } elseif (in_array($method, ['query', 'newQuery', 'newModelQuery'])) {
                     $reflection = new \ReflectionClass($model);
@@ -725,10 +725,10 @@ class Model extends Command
         // Return something in the very very unlikely scenario the model doesn't
         // have a newCollection() method.
         if (!method_exists($className, 'newCollection')) {
-            return '\Illuminate\Database\Eloquent\Collection';
+            return '\Hyperf\Database\Model\Collection';
         }
 
-        /** @var \Illuminate\Database\Eloquent\Model $model */
+        /** @var \Hyperf\Database\Model\Model $model */
         $model = new $className;
         return '\\' . get_class($model->newCollection());
     }
@@ -768,7 +768,7 @@ class Model extends Command
     protected function getSoftDeleteMethods($model)
     {
         $traits = class_uses(get_class($model), true);
-        if (in_array('Illuminate\\Database\\Eloquent\\SoftDeletes', $traits)) {
+        if (in_array('Hyperf\\Database\\Model\\SoftDeletes', $traits)) {
             $this->setMethod('forceDelete', 'bool|null', []);
             $this->setMethod('restore', 'bool|null', []);
 
