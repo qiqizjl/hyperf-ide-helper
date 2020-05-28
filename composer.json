@@ -20,16 +20,16 @@
     "require": {
         "php": ">=7.2",
         "ext-swoole": ">=4.4",
+        "barryvdh/reflection-docblock": "^2.0",
+        "composer/composer": "^1.9.1",
         "hyperf/contract": "~1.1.0",
-        "hyperf/utils": "~1.1.0",
-        "composer/composer": "^1.9.1"
+        "hyperf/utils": "~1.1.0"
     },
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^2.14",
         "phpstan/phpstan": "^0.10.5",
         "hyperf/testing": "1.1.*",
         "swoft/swoole-ide-helper": "dev-master",
-        "barryvdh/reflection-docblock": "^2.0",
         "doctrine/dbal": "^2.6.0"
     },
     "config": {
