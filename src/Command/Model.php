@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Naixiaoxin\HyperfIdeHelper\Command;
 
+use Hyperf\Database\Model\Relations\Relation;
 use Hyperf\Utils\Filesystem\Filesystem;
 use Hyperf\Utils\Str;
 use ReflectionClass;
@@ -64,9 +65,7 @@ class Model extends Command
     {
         $this->loadIgnore();
 
-        $this->dateClass = class_exists(\Illuminate\Support\Facades\Date::class)
-            ? '\\' . get_class(\Illuminate\Support\Facades\Date::now())
-            : '\Illuminate\Support\Carbon';
+        $this->dateClass  = '\Carbon\Carbon';
         $content         = $this->generateDocs([]);
         $file = $this->container->get(Filesystem::class);
         $file->put($this->filename,$content);
@@ -204,7 +203,7 @@ class Model extends Command
     /**
      * cast the properties's type from $casts.
      *
-     * @param \Illuminate\Database\Eloquent\Model $model
+     * @param \Hyperf\Database\Model\Model $model
      */
     protected function castPropertiesType($model)
     {
@@ -240,7 +239,7 @@ class Model extends Command
                     $realType = $this->dateClass;
                     break;
                 case 'collection':
-                    $realType = '\Illuminate\Support\Collection';
+                    $realType = '\Hyperf\Utils\Collection';
                     break;
                 default:
                     $realType = class_exists($type) ? ('\\' . $type) : 'mixed';
@@ -275,7 +274,7 @@ class Model extends Command
     /**
      * Load the properties from the database table.
      *
-     * @param \Illuminate\Database\Eloquent\Model $model
+     * @param \Hyperf\Database\Model\Model $model
      */
     protected function getPropertiesFromTable($model)
     {
@@ -320,15 +319,7 @@ class Model extends Command
                             $type = 'integer';
                             break;
                         case 'boolean':
-                            switch (config('database.default')) {
-                                case 'sqlite':
-                                case 'mysql':
-                                    $type = 'integer';
-                                    break;
-                                default:
-                                    $type = 'boolean';
-                                    break;
-                            }
+                            $type = 'integer';
                             break;
                         case 'decimal':
                         case 'float':
@@ -357,7 +348,7 @@ class Model extends Command
     }
 
     /**
-     * @param \Illuminate\Database\Eloquent\Model $model
+     * @param \Hyperf\Database\Model\Model $model
      */
     protected function getPropertiesFromMethods($model)
     {
@@ -403,10 +394,9 @@ class Model extends Command
                     $builder = get_class($model->newModelQuery());
 
                     $this->setMethod($method, "\\{$builder}|\\" . $reflection->getName());
-                } elseif (!method_exists('Illuminate\Database\Eloquent\Model', $method)
+                } elseif (!method_exists('Hyperf\DbConnection\Model\Model', $method)
                           && !Str::startsWith($method, 'get')
                 ) {
-                    //Use reflection to inspect the code, based on Illuminate/Support/SerializableClosure.php
                     $reflection = new \ReflectionMethod($model, $method);
 
                     if ($returnType = $reflection->getReturnType()) {
@@ -432,17 +422,17 @@ class Model extends Command
                     $code  = substr($code, $begin, strrpos($code, '}') - $begin + 1);
 
                     foreach (array (
-                                 'hasMany'        => '\Illuminate\Database\Eloquent\Relations\HasMany',
-                                 'hasManyThrough' => '\Illuminate\Database\Eloquent\Relations\HasManyThrough',
-                                 'hasOneThrough'  => '\Illuminate\Database\Eloquent\Relations\HasOneThrough',
-                                 'belongsToMany'  => '\Illuminate\Database\Eloquent\Relations\BelongsToMany',
-                                 'hasOne'         => '\Illuminate\Database\Eloquent\Relations\HasOne',
-                                 'belongsTo'      => '\Illuminate\Database\Eloquent\Relations\BelongsTo',
-                                 'morphOne'       => '\Illuminate\Database\Eloquent\Relations\MorphOne',
-                                 'morphTo'        => '\Illuminate\Database\Eloquent\Relations\MorphTo',
-                                 'morphMany'      => '\Illuminate\Database\Eloquent\Relations\MorphMany',
-                                 'morphToMany'    => '\Illuminate\Database\Eloquent\Relations\MorphToMany',
-                                 'morphedByMany'  => '\Illuminate\Database\Eloquent\Relations\MorphToMany',
+                                 'hasMany'        => '\Hyperf\Database\Model\Relations\HasMany',
+                                 'hasManyThrough' => '\Hyperf\Database\Model\Relations\HasManyThrough',
+                                 'hasOneThrough'  => '\Hyperf\Database\Model\Relations\HasOneThrough',
+                                 'belongsToMany'  => '\Hyperf\Database\Model\Relations\BelongsToMany',
+                                 'hasOne'         => '\Hyperf\Database\Model\Relations\HasOne',
+                                 'belongsTo'      => '\Hyperf\Database\Model\Relations\BelongsTo',
+                                 'morphOne'       => '\Hyperf\Database\Model\Relations\MorphOne',
+                                 'morphTo'        => '\Hyperf\Database\Model\Relations\MorphTo',
+                                 'morphMany'      => '\Hyperf\Database\Model\Relations\MorphMany',
+                                 'morphToMany'    => '\Hyperf\Database\Model\Relations\MorphToMany',
+                                 'morphedByMany'  => '\Hyperf\Database\Model\Relations\MorphToMany',
                              ) as $relation => $impl) {
                         $search = '$this->' . $relation . '(';
                         if (stripos($code, $search) || ltrim($impl, '\\') === ltrim((string)$type, '\\')) {
@@ -488,7 +478,7 @@ class Model extends Command
                                     // Model isn't specified because relation is polymorphic
                                     $this->setProperty(
                                         $method,
-                                        '\Illuminate\Database\Eloquent\Model|\Eloquent',
+                                        '\Hyperf\DbConnection\Model\Model|\Eloquent',
                                         true,
                                         null
                                     );
@@ -763,7 +753,7 @@ class Model extends Command
     /**
      * Generates methods provided by the SoftDeletes trait
      *
-     * @param \Illuminate\Database\Eloquent\Model $model
+     * @param \Hyperf\Database\Model\Model $model
      */
     protected function getSoftDeleteMethods($model)
     {
@@ -772,9 +762,9 @@ class Model extends Command
             $this->setMethod('forceDelete', 'bool|null', []);
             $this->setMethod('restore', 'bool|null', []);
 
-            $this->setMethod('withTrashed', '\Illuminate\Database\Query\Builder|\\' . get_class($model), []);
-            $this->setMethod('withoutTrashed', '\Illuminate\Database\Query\Builder|\\' . get_class($model), []);
-            $this->setMethod('onlyTrashed', '\Illuminate\Database\Query\Builder|\\' . get_class($model), []);
+            $this->setMethod('withTrashed', '\Hyperf\Database\Model\Builder|\\' . get_class($model), []);
+            $this->setMethod('withoutTrashed', '\Hyperf\Database\Model\Builder|\\' . get_class($model), []);
+            $this->setMethod('onlyTrashed', '\Hyperf\Database\Model\Builder|\\' . get_class($model), []);
         }
     }
 
