@@ -9,7 +9,6 @@ declare(strict_types=1);
  * @contact  group@hyperf.io
  * @license  https://github.com/hyperf-cloud/hyperf/blob/master/LICENSE
  */
-
 namespace Naixiaoxin\HyperfIdeHelper;
 
 use Naixiaoxin\HyperfIdeHelper\Command\Eloquent;
@@ -22,11 +21,11 @@ class ConfigProvider
         return [
             'dependencies' => [
             ],
-            'commands'     => [
+            'commands' => [
                 Model::class,
-                Eloquent::class
+                Eloquent::class,
             ],
-            'annotations'  => [
+            'annotations' => [
                 'scan' => [
                     'paths' => [
                         __DIR__,

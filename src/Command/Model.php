@@ -2,89 +2,76 @@
 
 declare(strict_types=1);
 /**
+ * This file is part of Hyperf.
  *
- *
- * @author    耐小心 <i@naixiaoixn.com>
- * @time      2019/12/14 12:15 上午
- *
- * @copyright 2019 耐小心
+ * @link     https://www.hyperf.io
+ * @document https://doc.hyperf.io
+ * @contact  group@hyperf.io
+ * @license  https://github.com/hyperf-cloud/hyperf/blob/master/LICENSE
  */
-
 namespace Naixiaoxin\HyperfIdeHelper\Command;
 
+use Barryvdh\Reflection\DocBlock;
+use Barryvdh\Reflection\DocBlock\Context;
+use Barryvdh\Reflection\DocBlock\Serializer as DocBlockSerializer;
+use Barryvdh\Reflection\DocBlock\Tag;
+use Composer\Autoload\ClassMapGenerator;
+use Hyperf\Command\Command;
+use Hyperf\Contract\ConfigInterface;
 use Hyperf\Database\Model\Relations\Relation;
+use Hyperf\Utils\ApplicationContext;
 use Hyperf\Utils\Filesystem\Filesystem;
 use Hyperf\Utils\Str;
 use ReflectionClass;
-use Composer\Autoload\ClassMapGenerator;
-use Hyperf\Command\Command;
-use Hyperf\Config\Config;
-use Hyperf\Contract\ConfigInterface;
-use Hyperf\Utils\ApplicationContext;
-use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
-use Barryvdh\Reflection\DocBlock;
-use Barryvdh\Reflection\DocBlock\Context;
-use Barryvdh\Reflection\DocBlock\Tag;
-use Barryvdh\Reflection\DocBlock\Serializer as DocBlockSerializer;
 
 class Model extends Command
 {
     // CLI名称
-    protected $name = "ide-helper:model";
+    protected $name = 'ide-helper:model';
 
     // 生成文件名称
     protected $filename = '_ide_helper_models.php';
 
+    protected $write_model_magic_where = true;
+
+    protected $properties = [];
+
+    protected $methods = [];
+
+    protected $write = false;
+
+    protected $reset = true;
+
+    protected $keep_text;
 
     private $ignore = [];
 
-    private   $dirs = ["app"];
+    private $dirs = ['app'];
 
-    protected $write_model_magic_where = true;
-    protected $properties = array();
-    protected $methods = array();
-    protected $write = false;
-    protected $reset = true;
-    protected $keep_text;
     private $container;
+
     private $config;
 
     public function __construct()
     {
         parent::__construct();
         $this->container = ApplicationContext::getContainer();
-        $this->config    = $this->container->get(ConfigInterface::class);
+        $this->config = $this->container->get(ConfigInterface::class);
     }
 
     /**
-     * 执行CLI
+     * 执行CLI.
      */
     public function handle()
     {
         $this->loadIgnore();
 
-        $this->dateClass  = '\Carbon\Carbon';
-        $content         = $this->generateDocs([]);
+        $this->dateClass = '\Carbon\Carbon';
+        $content = $this->generateDocs([]);
         $file = $this->container->get(Filesystem::class);
-        $file->put($this->filename,$content);
-    }
-
-
-    protected function configure()
-    {
-        $this->addOption('ignore', "i", InputOption::VALUE_OPTIONAL, 'What prefix that you want the Model set.');
-
-    }
-
-    private function loadIgnore()
-    {
-        $ignore       = $this->getOption("ignore", "");
-        $this->ignore = array_merge(
-            explode(',', $ignore),
-            $this->config->get("ide-helper.ignored_models", [])
-        );
+        $file->put($this->filename, $content);
     }
 
     public function getOption($key, $default)
@@ -96,11 +83,49 @@ class Model extends Command
         return $default;
     }
 
+    /**
+     * Get the parameters and format them correctly.
+     *
+     * @param $method
+     * @return array
+     */
+    public function getParameters($method)
+    {
+        //Loop through the default values for paremeters, and make the correct output string
+        $params = [];
+        $paramsWithDefault = [];
+        /** @var \ReflectionParameter $param */
+        foreach ($method->getParameters() as $param) {
+            $paramClass = $param->getClass();
+            $paramStr = (! is_null($paramClass) ? '\\' . $paramClass->getName() . ' ' : '') . '$' . $param->getName();
+            $params[] = $paramStr;
+            if ($param->isOptional() && $param->isDefaultValueAvailable()) {
+                $default = $param->getDefaultValue();
+                if (is_bool($default)) {
+                    $default = $default ? 'true' : 'false';
+                } elseif (is_array($default)) {
+                    $default = '[]';
+                } elseif (is_null($default)) {
+                    $default = 'null';
+                } elseif (is_int($default)) {
+                    //$default = $default;
+                } else {
+                    $default = "'" . trim($default) . "'";
+                }
+                $paramStr .= " = {$default}";
+            }
+            $paramsWithDefault[] = $paramStr;
+        }
+        return $paramsWithDefault;
+    }
+
+    protected function configure()
+    {
+        $this->addOption('ignore', 'i', InputOption::VALUE_OPTIONAL, 'What prefix that you want the Model set.');
+    }
 
     protected function generateDocs($loadModels)
     {
-
-
         $output = "<?php
 // @formatter:off
 /**
@@ -119,36 +144,35 @@ class Model extends Command
         if (empty($loadModels)) {
             $models = $this->loadModels();
         } else {
-            $models = array ();
+            $models = [];
             foreach ($loadModels as $model) {
                 $models = array_merge($models, explode(',', $model));
             }
         }
 
-
         foreach ($models as $name) {
             if (in_array($name, $this->ignore)) {
                 if ($this->output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
-                    $this->comment("Ignoring model '$name'");
+                    $this->comment("Ignoring model '{$name}'");
                 }
                 continue;
             }
-            $this->properties = array ();
-            $this->methods    = array ();
+            $this->properties = [];
+            $this->methods = [];
             if (class_exists($name)) {
                 try {
                     // handle abstract classes, interfaces, ...
                     $reflectionClass = new ReflectionClass($name);
 
-                    if (!$reflectionClass->isSubclassOf('Hyperf\DbConnection\Model\Model')) {
+                    if (! $reflectionClass->isSubclassOf('Hyperf\DbConnection\Model\Model')) {
                         continue;
                     }
 
                     if ($this->output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
-                        $this->comment("Loading model '$name'");
+                        $this->comment("Loading model '{$name}'");
                     }
 
-                    if (!$reflectionClass->IsInstantiable()) {
+                    if (! $reflectionClass->IsInstantiable()) {
                         // ignore abstract class or interface
                         continue;
                     }
@@ -164,18 +188,18 @@ class Model extends Command
 
                     $this->getPropertiesFromMethods($model);
                     $this->getSoftDeleteMethods($model);
-                    $output                .= $this->createPhpDocs($name);
-                    $ignore[]              = $name;
+                    $output .= $this->createPhpDocs($name);
+                    $ignore[] = $name;
                     $this->nullableColumns = [];
                 } catch (\Throwable $e) {
-                    $this->error("Exception: " . $e->getMessage() .
-                                 "\nCould not analyze class $name.\n\nTrace:\n" .
+                    $this->error('Exception: ' . $e->getMessage() .
+                                 "\nCould not analyze class {$name}.\n\nTrace:\n" .
                                  $e->getTraceAsString());
                 }
             }
         }
 
-        if (!$hasDoctrine) {
+        if (! $hasDoctrine) {
             $this->error(
                 'Warning: `"doctrine/dbal": "~2.3"` is required to load database information. ' .
                 'Please require that in your composer.json and run `composer update`.'
@@ -185,10 +209,9 @@ class Model extends Command
         return $output;
     }
 
-
     protected function loadModels()
     {
-        $models = array ();
+        $models = [];
         foreach ($this->dirs as $dir) {
             $dir = BASE_PATH . '/' . $dir;
             if (file_exists($dir)) {
@@ -246,14 +269,13 @@ class Model extends Command
                     break;
             }
 
-            if (!isset($this->properties[$name])) {
+            if (! isset($this->properties[$name])) {
                 continue;
-            } else {
-                $this->properties[$name]['type'] = $this->getTypeOverride($realType);
+            }
+            $this->properties[$name]['type'] = $this->getTypeOverride($realType);
 
-                if (isset($this->nullableColumns[$name])) {
-                    $this->properties[$name]['type'] .= '|null';
-                }
+            if (isset($this->nullableColumns[$name])) {
+                $this->properties[$name]['type'] .= '|null';
             }
         }
     }
@@ -266,7 +288,7 @@ class Model extends Command
      */
     protected function getTypeOverride($type)
     {
-        $typeOverrides = $this->config->get('ide-helper.type_overrides', array ());
+        $typeOverrides = $this->config->get('ide-helper.type_overrides', []);
 
         return isset($typeOverrides[$type]) ? $typeOverrides[$type] : $type;
     }
@@ -278,20 +300,20 @@ class Model extends Command
      */
     protected function getPropertiesFromTable($model)
     {
-        $table            = $model->getConnection()->getTablePrefix() . $model->getTable();
-        $schema           = $model->getConnection()->getDoctrineSchemaManager($table);
+        $table = $model->getConnection()->getTablePrefix() . $model->getTable();
+        $schema = $model->getConnection()->getDoctrineSchemaManager($table);
         $databasePlatform = $schema->getDatabasePlatform();
         $databasePlatform->registerDoctrineTypeMapping('enum', 'string');
 
         $platformName = $databasePlatform->getName();
-        $customTypes  = $this->config->get("ide-helper.custom_db_types.{$platformName}", array ());
+        $customTypes = $this->config->get("ide-helper.custom_db_types.{$platformName}", []);
         foreach ($customTypes as $yourTypeName => $doctrineTypeName) {
             $databasePlatform->registerDoctrineTypeMapping($yourTypeName, $doctrineTypeName);
         }
 
         $database = null;
         if (strpos($table, '.')) {
-            list($database, $table) = explode('.', $table);
+            [$database, $table] = explode('.', $table);
         }
 
         $columns = $schema->listTableColumns($table, $database);
@@ -332,15 +354,15 @@ class Model extends Command
                 }
 
                 $comment = $column->getComment();
-                if (!$column->getNotnull()) {
+                if (! $column->getNotnull()) {
                     $this->nullableColumns[$name] = true;
                 }
-                $this->setProperty($name, $type, true, true, $comment, !$column->getNotnull());
+                $this->setProperty($name, $type, true, true, $comment, ! $column->getNotnull());
                 if ($this->write_model_magic_where) {
                     $this->setMethod(
-                        Str::camel("where_" . $name),
+                        Str::camel('where_' . $name),
                         '\Hyperf\Database\Model\Builder|\\' . get_class($model),
-                        array ('$value')
+                        ['$value']
                     );
                 }
             }
@@ -357,33 +379,33 @@ class Model extends Command
             sort($methods);
             foreach ($methods as $method) {
                 if (Str::startsWith($method, 'get') && Str::endsWith(
-                        $method,
-                        'Attribute'
-                    ) && $method !== 'getAttribute'
+                    $method,
+                    'Attribute'
+                ) && $method !== 'getAttribute'
                 ) {
                     //Magic get<name>Attribute
                     $name = Str::snake(substr($method, 3, -9));
-                    if (!empty($name)) {
+                    if (! empty($name)) {
                         $reflection = new \ReflectionMethod($model, $method);
-                        $type       = $this->getReturnTypeFromDocBlock($reflection);
+                        $type = $this->getReturnTypeFromDocBlock($reflection);
                         $this->setProperty($name, $type, true, null);
                     }
                 } elseif (Str::startsWith($method, 'set') && Str::endsWith(
-                        $method,
-                        'Attribute'
-                    ) && $method !== 'setAttribute'
+                    $method,
+                    'Attribute'
+                ) && $method !== 'setAttribute'
                 ) {
                     //Magic set<name>Attribute
                     $name = Str::snake(substr($method, 3, -9));
-                    if (!empty($name)) {
+                    if (! empty($name)) {
                         $this->setProperty($name, null, null, true);
                     }
                 } elseif (Str::startsWith($method, 'scope') && $method !== 'scopeQuery') {
                     //Magic set<name>Attribute
                     $name = Str::camel(substr($method, 5));
-                    if (!empty($name)) {
+                    if (! empty($name)) {
                         $reflection = new \ReflectionMethod($model, $method);
-                        $args       = $this->getParameters($reflection);
+                        $args = $this->getParameters($reflection);
                         //Remove the first ($query) argument
                         array_shift($args);
                         $this->setMethod($name, '\Hyperf\Database\Model\Builder|\\' . $reflection->class, $args);
@@ -394,18 +416,18 @@ class Model extends Command
                     $builder = get_class($model->newModelQuery());
 
                     $this->setMethod($method, "\\{$builder}|\\" . $reflection->getName());
-                } elseif (!method_exists('Hyperf\DbConnection\Model\Model', $method)
-                          && !Str::startsWith($method, 'get')
+                } elseif (! method_exists('Hyperf\DbConnection\Model\Model', $method)
+                          && ! Str::startsWith($method, 'get')
                 ) {
                     $reflection = new \ReflectionMethod($model, $method);
 
                     if ($returnType = $reflection->getReturnType()) {
                         $type = $returnType instanceof \ReflectionNamedType
                             ? $returnType->getName()
-                            : (string)$returnType;
+                            : (string) $returnType;
                     } else {
                         // php 7.x type or fallback to docblock
-                        $type = (string)$this->getReturnTypeFromDocBlock($reflection);
+                        $type = (string) $this->getReturnTypeFromDocBlock($reflection);
                     }
 
                     $file = new \SplFileObject($reflection->getFileName());
@@ -416,26 +438,26 @@ class Model extends Command
                         $code .= $file->current();
                         $file->next();
                     }
-                    $code  = trim(preg_replace('/\s\s+/', '', $code));
+                    $code = trim(preg_replace('/\s\s+/', '', $code));
                     $begin = strpos($code, 'function');
 
-                    $code  = substr($code, $begin, strrpos($code, '}') - $begin + 1);
+                    $code = substr($code, $begin, strrpos($code, '}') - $begin + 1);
 
-                    foreach (array (
-                                 'hasMany'        => '\Hyperf\Database\Model\Relations\HasMany',
-                                 'hasManyThrough' => '\Hyperf\Database\Model\Relations\HasManyThrough',
-                                 'hasOneThrough'  => '\Hyperf\Database\Model\Relations\HasOneThrough',
-                                 'belongsToMany'  => '\Hyperf\Database\Model\Relations\BelongsToMany',
-                                 'hasOne'         => '\Hyperf\Database\Model\Relations\HasOne',
-                                 'belongsTo'      => '\Hyperf\Database\Model\Relations\BelongsTo',
-                                 'morphOne'       => '\Hyperf\Database\Model\Relations\MorphOne',
-                                 'morphTo'        => '\Hyperf\Database\Model\Relations\MorphTo',
-                                 'morphMany'      => '\Hyperf\Database\Model\Relations\MorphMany',
-                                 'morphToMany'    => '\Hyperf\Database\Model\Relations\MorphToMany',
-                                 'morphedByMany'  => '\Hyperf\Database\Model\Relations\MorphToMany',
-                             ) as $relation => $impl) {
+                    foreach ([
+                        'hasMany' => '\Hyperf\Database\Model\Relations\HasMany',
+                        'hasManyThrough' => '\Hyperf\Database\Model\Relations\HasManyThrough',
+                        'hasOneThrough' => '\Hyperf\Database\Model\Relations\HasOneThrough',
+                        'belongsToMany' => '\Hyperf\Database\Model\Relations\BelongsToMany',
+                        'hasOne' => '\Hyperf\Database\Model\Relations\HasOne',
+                        'belongsTo' => '\Hyperf\Database\Model\Relations\BelongsTo',
+                        'morphOne' => '\Hyperf\Database\Model\Relations\MorphOne',
+                        'morphTo' => '\Hyperf\Database\Model\Relations\MorphTo',
+                        'morphMany' => '\Hyperf\Database\Model\Relations\MorphMany',
+                        'morphToMany' => '\Hyperf\Database\Model\Relations\MorphToMany',
+                        'morphedByMany' => '\Hyperf\Database\Model\Relations\MorphToMany',
+                    ] as $relation => $impl) {
                         $search = '$this->' . $relation . '(';
-                        if (stripos($code, $search) || ltrim($impl, '\\') === ltrim((string)$type, '\\')) {
+                        if (stripos($code, $search) || ltrim($impl, '\\') === ltrim((string) $type, '\\')) {
                             //Resolve the relation's model to a Relation object.
                             $methodReflection = new \ReflectionMethod($model, $method);
                             if ($methodReflection->getNumberOfParameters()) {
@@ -446,7 +468,7 @@ class Model extends Command
                             // can cause errors. Since we don't need constraints we can
                             // disable them when we fetch the relation to avoid errors.
                             $relationObj = Relation::noConstraints(function () use ($model, $method) {
-                                return $model->$method();
+                                return $model->{$method}();
                             });
 
                             if ($relationObj instanceof Relation) {
@@ -474,7 +496,7 @@ class Model extends Command
                                         true,
                                         false
                                     );
-                                } elseif ($relation === "morphTo") {
+                                } elseif ($relation === 'morphTo') {
                                     // Model isn't specified because relation is polymorphic
                                     $this->setProperty(
                                         $method,
@@ -502,40 +524,21 @@ class Model extends Command
     }
 
     /**
-     * Check if the foreign key of the relation is nullable
-     *
-     * @param Relation $relation
-     *
-     * @return bool
-     */
-    private function isRelationForeignKeyNullable(Relation $relation)
-    {
-        $reflectionObj = new \ReflectionObject($relation);
-        if (!$reflectionObj->hasProperty('foreignKey')) {
-            return false;
-        }
-        $fkProp = $reflectionObj->getProperty('foreignKey');
-        $fkProp->setAccessible(true);
-
-        return isset($this->nullableColumns[$fkProp->getValue($relation)]);
-    }
-
-    /**
-     * @param string      $name
-     * @param string|null $type
-     * @param bool|null   $read
-     * @param bool|null   $write
-     * @param string|null $comment
-     * @param bool        $nullable
+     * @param string $name
+     * @param null|string $type
+     * @param null|bool $read
+     * @param null|bool $write
+     * @param null|string $comment
+     * @param bool $nullable
      */
     protected function setProperty($name, $type = null, $read = null, $write = null, $comment = '', $nullable = false)
     {
-        if (!isset($this->properties[$name])) {
-            $this->properties[$name]            = array ();
-            $this->properties[$name]['type']    = 'mixed';
-            $this->properties[$name]['read']    = false;
-            $this->properties[$name]['write']   = false;
-            $this->properties[$name]['comment'] = (string)$comment;
+        if (! isset($this->properties[$name])) {
+            $this->properties[$name] = [];
+            $this->properties[$name]['type'] = 'mixed';
+            $this->properties[$name]['read'] = false;
+            $this->properties[$name]['write'] = false;
+            $this->properties[$name]['comment'] = (string) $comment;
         }
         if ($type !== null) {
             $newType = $this->getTypeOverride($type);
@@ -552,13 +555,13 @@ class Model extends Command
         }
     }
 
-    protected function setMethod($name, $type = '', $arguments = array ())
+    protected function setMethod($name, $type = '', $arguments = [])
     {
         $methods = array_change_key_case($this->methods, CASE_LOWER);
 
-        if (!isset($methods[strtolower($name)])) {
-            $this->methods[$name]              = array ();
-            $this->methods[$name]['type']      = $type;
+        if (! isset($methods[strtolower($name)])) {
+            $this->methods[$name] = [];
+            $this->methods[$name]['type'] = $type;
             $this->methods[$name]['arguments'] = $arguments;
         }
     }
@@ -569,12 +572,11 @@ class Model extends Command
      */
     protected function createPhpDocs($class)
     {
-
-        $reflection  = new ReflectionClass($class);
-        $namespace   = $reflection->getNamespaceName();
-        $classname   = $reflection->getShortName();
+        $reflection = new ReflectionClass($class);
+        $namespace = $reflection->getNamespaceName();
+        $classname = $reflection->getShortName();
         $originalDoc = $reflection->getDocComment();
-        $keyword     = $this->getClassKeyword($reflection);
+        $keyword = $this->getClassKeyword($reflection);
 
         if ($this->reset) {
             $phpdoc = new DocBlock('', new Context($namespace));
@@ -587,23 +589,23 @@ class Model extends Command
             $phpdoc = new DocBlock($reflection, new Context($namespace));
         }
 
-        if (!$phpdoc->getText()) {
+        if (! $phpdoc->getText()) {
             $phpdoc->setText($class);
         }
 
-        $properties = array ();
-        $methods    = array ();
+        $properties = [];
+        $methods = [];
         foreach ($phpdoc->getTags() as $tag) {
             $name = $tag->getName();
-            if ($name == "property" || $name == "property-read" || $name == "property-write") {
+            if ($name == 'property' || $name == 'property-read' || $name == 'property-write') {
                 $properties[] = $tag->getVariableName();
-            } elseif ($name == "method") {
+            } elseif ($name == 'method') {
                 $methods[] = $tag->getMethodName();
             }
         }
 
         foreach ($this->properties as $name => $property) {
-            $name = "\$$name";
+            $name = "\${$name}";
 
             if ($this->hasCamelCaseModelProperties()) {
                 $name = Str::camel($name);
@@ -621,7 +623,7 @@ class Model extends Command
             }
 
             $tagLine = trim("@{$attr} {$property['type']} {$name} {$property['comment']}");
-            $tag     = Tag::createInstance($tagLine, $phpdoc);
+            $tag = Tag::createInstance($tagLine, $phpdoc);
             $phpdoc->appendTag($tag);
         }
 
@@ -632,18 +634,17 @@ class Model extends Command
                 continue;
             }
             $arguments = implode(', ', $method['arguments']);
-            $tag       = Tag::createInstance("@method static {$method['type']} {$name}({$arguments})", $phpdoc);
+            $tag = Tag::createInstance("@method static {$method['type']} {$name}({$arguments})", $phpdoc);
             $phpdoc->appendTag($tag);
         }
 
-        if ($this->write && !$phpdoc->getTagsByName('mixin')) {
-            $phpdoc->appendTag(Tag::createInstance("@mixin \\Eloquent", $phpdoc));
+        if ($this->write && ! $phpdoc->getTagsByName('mixin')) {
+            $phpdoc->appendTag(Tag::createInstance('@mixin \\Eloquent', $phpdoc));
         }
 
         $serializer = new DocBlockSerializer();
         $serializer->getDocComment($phpdoc);
         $docComment = $serializer->getDocComment($phpdoc);
-
 
         if ($this->write) {
             $filename = $reflection->getFileName();
@@ -651,9 +652,9 @@ class Model extends Command
             if ($originalDoc) {
                 $contents = str_replace($originalDoc, $docComment, $contents);
             } else {
-                $needle  = "class {$classname}";
+                $needle = "class {$classname}";
                 $replace = "{$docComment}\nclass {$classname}";
-                $pos     = strpos($contents, $needle);
+                $pos = strpos($contents, $needle);
                 if ($pos !== false) {
                     $contents = substr_replace($contents, $replace, $pos, strlen($needle));
                 }
@@ -663,64 +664,7 @@ class Model extends Command
             }
         }
 
-        $output = "namespace {$namespace}{\n{$docComment}\n\t{$keyword}class {$classname} extends \Eloquent {}\n}\n\n";
-        return $output;
-    }
-
-    /**
-     * Get the parameters and format them correctly
-     *
-     * @param $method
-     * @return array
-     */
-    public function getParameters($method)
-    {
-        //Loop through the default values for paremeters, and make the correct output string
-        $params            = array ();
-        $paramsWithDefault = array ();
-        /** @var \ReflectionParameter $param */
-        foreach ($method->getParameters() as $param) {
-            $paramClass = $param->getClass();
-            $paramStr   = (!is_null($paramClass) ? '\\' . $paramClass->getName() . ' ' : '') . '$' . $param->getName();
-            $params[]   = $paramStr;
-            if ($param->isOptional() && $param->isDefaultValueAvailable()) {
-                $default = $param->getDefaultValue();
-                if (is_bool($default)) {
-                    $default = $default ? 'true' : 'false';
-                } elseif (is_array($default)) {
-                    $default = '[]';
-                } elseif (is_null($default)) {
-                    $default = 'null';
-                } elseif (is_int($default)) {
-                    //$default = $default;
-                } else {
-                    $default = "'" . trim($default) . "'";
-                }
-                $paramStr .= " = $default";
-            }
-            $paramsWithDefault[] = $paramStr;
-        }
-        return $paramsWithDefault;
-    }
-
-    /**
-     * Determine a model classes' collection type.
-     *
-     * @see http://laravel.com/docs/eloquent-collections#custom-collections
-     * @param string $className
-     * @return string
-     */
-    private function getCollectionClass($className)
-    {
-        // Return something in the very very unlikely scenario the model doesn't
-        // have a newCollection() method.
-        if (!method_exists($className, 'newCollection')) {
-            return '\Hyperf\Database\Model\Collection';
-        }
-
-        /** @var \Hyperf\Database\Model\Model $model */
-        $model = new $className;
-        return '\\' . get_class($model->newCollection());
+        return "namespace {$namespace}{\n{$docComment}\n\t{$keyword}class {$classname} extends \\Eloquent {}\n}\n\n";
     }
 
     /**
@@ -732,15 +676,13 @@ class Model extends Command
     }
 
     /**
-     * Get method return type based on it DocBlock comment
-     *
-     * @param \ReflectionMethod $reflection
+     * Get method return type based on it DocBlock comment.
      *
      * @return null|string
      */
     protected function getReturnTypeFromDocBlock(\ReflectionMethod $reflection)
     {
-        $type   = null;
+        $type = null;
         $phpdoc = new DocBlock($reflection);
 
         if ($phpdoc->hasTag('return')) {
@@ -751,7 +693,7 @@ class Model extends Command
     }
 
     /**
-     * Generates methods provided by the SoftDeletes trait
+     * Generates methods provided by the SoftDeletes trait.
      *
      * @param \Hyperf\Database\Model\Model $model
      */
@@ -768,8 +710,53 @@ class Model extends Command
         }
     }
 
+    private function loadIgnore()
+    {
+        $ignore = $this->getOption('ignore', '');
+        $this->ignore = array_merge(
+            explode(',', $ignore),
+            $this->config->get('ide-helper.ignored_models', [])
+        );
+    }
+
     /**
-     * @param ReflectionClass $reflection
+     * Check if the foreign key of the relation is nullable.
+     *
+     * @return bool
+     */
+    private function isRelationForeignKeyNullable(Relation $relation)
+    {
+        $reflectionObj = new \ReflectionObject($relation);
+        if (! $reflectionObj->hasProperty('foreignKey')) {
+            return false;
+        }
+        $fkProp = $reflectionObj->getProperty('foreignKey');
+        $fkProp->setAccessible(true);
+
+        return isset($this->nullableColumns[$fkProp->getValue($relation)]);
+    }
+
+    /**
+     * Determine a model classes' collection type.
+     *
+     * @see http://laravel.com/docs/eloquent-collections#custom-collections
+     * @param string $className
+     * @return string
+     */
+    private function getCollectionClass($className)
+    {
+        // Return something in the very very unlikely scenario the model doesn't
+        // have a newCollection() method.
+        if (! method_exists($className, 'newCollection')) {
+            return '\Hyperf\Database\Model\Collection';
+        }
+
+        /** @var \Hyperf\Database\Model\Model $model */
+        $model = new $className();
+        return '\\' . get_class($model->newCollection());
+    }
+
+    /**
      * @return string
      */
     private function getClassKeyword(ReflectionClass $reflection)

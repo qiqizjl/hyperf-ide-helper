@@ -2,23 +2,21 @@
 
 declare(strict_types=1);
 /**
+ * This file is part of Hyperf.
  *
- *
- * @author    耐小心 <i@naixiaoixn.com>
- * @time      2020/3/27 2:12 上午
- *
- * @copyright 2020 耐小心
+ * @link     https://www.hyperf.io
+ * @document https://doc.hyperf.io
+ * @contact  group@hyperf.io
+ * @license  https://github.com/hyperf-cloud/hyperf/blob/master/LICENSE
  */
-
-
 namespace Naixiaoxin\HyperfIdeHelper;
 
 use Barryvdh\Reflection\DocBlock;
 use Barryvdh\Reflection\DocBlock\Context;
-use Barryvdh\Reflection\DocBlock\Tag;
-use Barryvdh\Reflection\DocBlock\Tag\ReturnTag;
-use Barryvdh\Reflection\DocBlock\Tag\ParamTag;
 use Barryvdh\Reflection\DocBlock\Serializer as DocBlockSerializer;
+use Barryvdh\Reflection\DocBlock\Tag;
+use Barryvdh\Reflection\DocBlock\Tag\ParamTag;
+use Barryvdh\Reflection\DocBlock\Tag\ReturnTag;
 use ReflectionException;
 use ReflectionMethod;
 
@@ -30,30 +28,39 @@ class Method
     /** @var ReflectionMethod */
     protected $method;
 
-    protected $output              = '';
+    protected $output = '';
+
     protected $declaringClassName;
+
     protected $name;
+
     protected $namespace;
-    protected $params              = array ();
-    protected $params_with_default = array ();
-    protected $interfaces          = array ();
+
+    protected $params = [];
+
+    protected $params_with_default = [];
+
+    protected $interfaces = [];
+
     protected $real_name;
-    protected $return              = null;
+
+    protected $return;
+
     protected $root;
 
     /**
-     * @param ReflectionMethod|\ReflectionFunctionAbstract $method
-     * @param string                                        $alias
-     * @param \ReflectionClass                              $class
-     * @param string|null                                   $methodName
-     * @param array                                         $interfaces
+     * @param \ReflectionFunctionAbstract|ReflectionMethod $method
+     * @param string $alias
+     * @param \ReflectionClass $class
+     * @param null|string $methodName
+     * @param array $interfaces
      */
-    public function __construct($method, $alias, $class, $methodName = null, $interfaces = array ())
+    public function __construct($method, $alias, $class, $methodName = null, $interfaces = [])
     {
-        $this->method     = $method;
+        $this->method = $method;
         $this->interfaces = $interfaces;
-        $this->name       = $methodName ?: $method->name;
-        $this->real_name  = $method->isClosure() ? $this->name : $method->name;
+        $this->name = $methodName ?: $method->name;
+        $this->real_name = $method->isClosure() ? $this->name : $method->name;
         $this->initClassDefinedProperties($method, $class);
 
         //Reference the 'real' function in the declaring class
@@ -78,26 +85,7 @@ class Method
     }
 
     /**
-     * @param ReflectionMethod $method
-     */
-    protected function initPhpDoc($method)
-    {
-        $this->phpdoc = new DocBlock($method, new Context($this->namespace));
-    }
-
-    /**
-     * @param ReflectionMethod $method
-     * @param \ReflectionClass  $class
-     */
-    protected function initClassDefinedProperties($method, \ReflectionClass $class)
-    {
-        $declaringClass           = $method->getDeclaringClass();
-        $this->namespace          = $declaringClass->getNamespaceName();
-        $this->declaringClassName = '\\' . ltrim($declaringClass->name, '\\');
-    }
-
-    /**
-     * Get the class wherein the function resides
+     * Get the class wherein the function resides.
      *
      * @return string
      */
@@ -107,7 +95,7 @@ class Method
     }
 
     /**
-     * Return the class from which this function would be called
+     * Return the class from which this function would be called.
      *
      * @return string
      */
@@ -121,7 +109,7 @@ class Method
      */
     public function isInstanceCall()
     {
-        return !($this->method->isClosure() || $this->method->isStatic());
+        return ! ($this->method->isClosure() || $this->method->isStatic());
     }
 
     /**
@@ -131,13 +119,12 @@ class Method
     {
         if ($this->isInstanceCall()) {
             return "\$instance->{$this->getRealName()}({$this->getParams()})";
-        } else {
-            return "{$this->getRoot()}::{$this->getRealName()}({$this->getParams()})";
         }
+        return "{$this->getRoot()}::{$this->getRealName()}({$this->getParams()})";
     }
 
     /**
-     * Get the docblock for this method
+     * Get the docblock for this method.
      *
      * @param string $prefix
      * @return mixed
@@ -149,7 +136,7 @@ class Method
     }
 
     /**
-     * Get the method name
+     * Get the method name.
      *
      * @return string
      */
@@ -159,7 +146,7 @@ class Method
     }
 
     /**
-     * Get the real method name
+     * Get the real method name.
      *
      * @return string
      */
@@ -169,7 +156,7 @@ class Method
     }
 
     /**
-     * Get the parameters for this method
+     * Get the parameters for this method.
      *
      * @param bool $implode Wether to implode the array or not
      * @return string
@@ -180,7 +167,7 @@ class Method
     }
 
     /**
-     * Get the parameters for this method including default values
+     * Get the parameters for this method including default values.
      *
      * @param bool $implode Wether to implode the array or not
      * @return string
@@ -191,9 +178,77 @@ class Method
     }
 
     /**
-     * Get the description and get the inherited docs.
+     * Should the function return a value?
      *
-     * @param DocBlock $phpdoc
+     * @return bool
+     */
+    public function shouldReturn()
+    {
+        if ($this->return !== 'void' && $this->method->name !== '__construct') {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Get the parameters and format them correctly.
+     *
+     * @param ReflectionMethod $method
+     * @throws ReflectionException
+     */
+    public function getParameters($method)
+    {
+        //Loop through the default values for paremeters, and make the correct output string
+        $params = [];
+        $paramsWithDefault = [];
+        foreach ($method->getParameters() as $param) {
+            $paramStr = $param->isVariadic() ? '...$' . $param->getName() : '$' . $param->getName();
+            $params[] = $paramStr;
+            if ($param->isOptional() && ! $param->isVariadic()) {
+                $default = $param->isDefaultValueAvailable() ? $param->getDefaultValue() : null;
+                if (is_bool($default)) {
+                    $default = $default ? 'true' : 'false';
+                } elseif (is_array($default)) {
+                    $default = '[]';
+                } elseif (is_null($default)) {
+                    $default = 'null';
+                } elseif (is_int($default)) {
+                    //$default = $default;
+                } elseif (is_resource($default)) {
+                    //skip to not fail
+                } else {
+                    $default = "'" . trim($default) . "'";
+                }
+                $paramStr .= " = {$default}";
+            }
+            $paramsWithDefault[] = $paramStr;
+        }
+
+        $this->params = $params;
+        $this->params_with_default = $paramsWithDefault;
+    }
+
+    /**
+     * @param ReflectionMethod $method
+     */
+    protected function initPhpDoc($method)
+    {
+        $this->phpdoc = new DocBlock($method, new Context($this->namespace));
+    }
+
+    /**
+     * @param ReflectionMethod $method
+     */
+    protected function initClassDefinedProperties($method, \ReflectionClass $class)
+    {
+        $declaringClass = $method->getDeclaringClass();
+        $this->namespace = $declaringClass->getNamespaceName();
+        $this->declaringClassName = '\\' . ltrim($declaringClass->name, '\\');
+    }
+
+    /**
+     * Get the description and get the inherited docs.
      */
     protected function normalizeDescription(DocBlock $phpdoc)
     {
@@ -202,7 +257,7 @@ class Method
 
         //Loop through parents/interfaces, to fill in {@inheritdoc}
         if (strpos($description, '{@inheritdoc}') !== false) {
-            $inheritdoc         = $this->getInheritDoc($this->method);
+            $inheritdoc = $this->getInheritDoc($this->method);
             $inheritDescription = $inheritdoc->getText();
 
             $description = str_replace('{@inheritdoc}', $inheritDescription, $description);
@@ -224,9 +279,7 @@ class Method
     }
 
     /**
-     * Normalize the parameters
-     *
-     * @param DocBlock $phpdoc
+     * Normalize the parameters.
      */
     protected function normalizeParams(DocBlock $phpdoc)
     {
@@ -247,9 +300,7 @@ class Method
     }
 
     /**
-     * Normalize the return tag (make full namespace, replace interfaces)
-     *
-     * @param DocBlock $phpdoc
+     * Normalize the return tag (make full namespace, replace interfaces).
      */
     protected function normalizeReturn(DocBlock $phpdoc)
     {
@@ -288,68 +339,13 @@ class Method
     {
         $string = str_replace('\Closure', 'Closure', $string);
         $string = str_replace('Closure', '\Closure', $string);
-        $string = str_replace('dynamic', 'mixed', $string);
-
-        return $string;
-    }
-
-    /**
-     * Should the function return a value?
-     *
-     * @return bool
-     */
-    public function shouldReturn()
-    {
-        if ($this->return !== "void" && $this->method->name !== "__construct") {
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Get the parameters and format them correctly
-     *
-     * @param ReflectionMethod $method
-     * @return void
-     * @throws ReflectionException
-     */
-    public function getParameters($method)
-    {
-        //Loop through the default values for paremeters, and make the correct output string
-        $params            = array ();
-        $paramsWithDefault = array ();
-        foreach ($method->getParameters() as $param) {
-            $paramStr = $param->isVariadic() ? '...$' . $param->getName() : '$' . $param->getName();
-            $params[] = $paramStr;
-            if ($param->isOptional() && !$param->isVariadic()) {
-                $default = $param->isDefaultValueAvailable() ? $param->getDefaultValue() : null;
-                if (is_bool($default)) {
-                    $default = $default ? 'true' : 'false';
-                } elseif (is_array($default)) {
-                    $default = '[]';
-                } elseif (is_null($default)) {
-                    $default = 'null';
-                } elseif (is_int($default)) {
-                    //$default = $default;
-                } elseif (is_resource($default)) {
-                    //skip to not fail
-                } else {
-                    $default = "'" . trim($default) . "'";
-                }
-                $paramStr .= " = $default";
-            }
-            $paramsWithDefault[] = $paramStr;
-        }
-
-        $this->params              = $params;
-        $this->params_with_default = $paramsWithDefault;
+        return str_replace('dynamic', 'mixed', $string);
     }
 
     /**
      * @param ReflectionMethod $reflectionMethod
-     * @return DocBlock
      * @throws ReflectionException
+     * @return DocBlock
      */
     protected function getInheritDoc($reflectionMethod)
     {
@@ -363,14 +359,13 @@ class Method
         }
         if ($method) {
             $namespace = $method->getDeclaringClass()->getNamespaceName();
-            $phpdoc    = new DocBlock($method, new Context($namespace));
+            $phpdoc = new DocBlock($method, new Context($namespace));
 
             if (strpos($phpdoc->getText(), '{@inheritdoc}') !== false) {
                 //Not at the end yet, try another parent/interface..
                 return $this->getInheritDoc($method);
-            } else {
-                return $phpdoc;
             }
+            return $phpdoc;
         }
     }
 }

@@ -2,62 +2,72 @@
 
 declare(strict_types=1);
 /**
+ * This file is part of Hyperf.
  *
- *
- * @author    耐小心 <i@naixiaoixn.com>
- * @time      2020/3/27 2:10 上午
- *
- * @copyright 2020 耐小心
+ * @link     https://www.hyperf.io
+ * @document https://doc.hyperf.io
+ * @contact  group@hyperf.io
+ * @license  https://github.com/hyperf-cloud/hyperf/blob/master/LICENSE
  */
-
 namespace Naixiaoxin\HyperfIdeHelper;
 
-
-use Closure;
-use ReflectionClass;
 use Barryvdh\Reflection\DocBlock;
 use Barryvdh\Reflection\DocBlock\Context;
-use Barryvdh\Reflection\DocBlock\Tag\MethodTag;
 use Barryvdh\Reflection\DocBlock\Serializer as DocBlockSerializer;
+use Barryvdh\Reflection\DocBlock\Tag\MethodTag;
+use Closure;
+use ReflectionClass;
 
 class Alias
 {
     protected $alias;
-    protected $facade;
-    protected $extends     = null;
-    protected $classType   = 'class';
-    protected $short;
-    protected $namespace   = '__root';
-    protected $root        = null;
-    protected $classes     = array ();
-    protected $methods     = array ();
-    protected $valid       = false;
-    protected $interfaces  = array ();
-    protected $phpdoc      = null;
-    protected $magicMethods;
-    protected $usedMethods = [];
 
+    protected $facade;
+
+    protected $extends;
+
+    protected $classType = 'class';
+
+    protected $short;
+
+    protected $namespace = '__root';
+
+    protected $root;
+
+    protected $classes = [];
+
+    protected $methods = [];
+
+    protected $valid = false;
+
+    protected $interfaces = [];
+
+    protected $phpdoc;
+
+    protected $magicMethods;
+
+    protected $usedMethods = [];
 
     /**
      * @param string $alias
      * @param string $facade
-     * @param array  $magicMethods
-     * @param array  $interfaces
+     * @param array $magicMethods
+     * @param array $interfaces
      * @throws \ReflectionException
      */
-    public function __construct($alias, $facade, $magicMethods = array (), $interfaces = array ())
+    public function __construct($alias, $facade, $magicMethods = [], $interfaces = [])
     {
-        $this->alias        = $alias;
+        $this->alias = $alias;
         $this->magicMethods = $magicMethods;
-        $this->interfaces   = $interfaces;
+        $this->interfaces = $interfaces;
 
         // Make the class absolute
-        $facade       = '\\' . ltrim($facade, '\\');
+        $facade = '\\' . ltrim($facade, '\\');
         $this->facade = $facade;
 
         $this->detectRoot();
 
-        if ((!$this->isTrait() && $this->root)) {
+        if ((! $this->isTrait() && $this->root)) {
             $this->valid = true;
         } else {
             return;
@@ -69,30 +79,29 @@ class Alias
         $this->detectClassType();
         $this->detectExtendsNamespace();
 
-        if (!empty($this->namespace)) {
+        if (! empty($this->namespace)) {
             //Create a DocBlock and serializer instance
             $this->phpdoc = new DocBlock(new ReflectionClass($alias), new Context($this->namespace));
         }
 
-
         if ($facade === '\Illuminate\Database\Eloquent\Model') {
-            $this->usedMethods = array ('decrement', 'increment');
+            $this->usedMethods = ['decrement', 'increment'];
         }
     }
 
     /**
-     * Add one or more classes to analyze
+     * Add one or more classes to analyze.
      *
      * @param array|string $classes
      */
     public function addClass($classes)
     {
-        $classes = (array)$classes;
+        $classes = (array) $classes;
         foreach ($classes as $class) {
             if (class_exists($class) || interface_exists($class)) {
                 $this->classes[] = $class;
             } else {
-                echo "Class not exists: $class\r\n";
+                echo "Class not exists: {$class}\r\n";
             }
         }
     }
@@ -108,7 +117,7 @@ class Alias
     }
 
     /**
-     * Get the classtype, 'interface' or 'class'
+     * Get the classtype, 'interface' or 'class'.
      *
      * @return string
      */
@@ -118,7 +127,7 @@ class Alias
     }
 
     /**
-     * Get the class which this alias extends
+     * Get the class which this alias extends.
      *
      * @return null|string
      */
@@ -128,7 +137,7 @@ class Alias
     }
 
     /**
-     * Get the class short name which this alias extends
+     * Get the class short name which this alias extends.
      *
      * @return null|string
      */
@@ -138,7 +147,7 @@ class Alias
     }
 
     /**
-     * Get the namespace of the class which this alias extends
+     * Get the namespace of the class which this alias extends.
      *
      * @return null|string
      */
@@ -148,7 +157,7 @@ class Alias
     }
 
     /**
-     * Get the Alias by which this class is called
+     * Get the Alias by which this class is called.
      *
      * @return string
      */
@@ -158,7 +167,7 @@ class Alias
     }
 
     /**
-     * Return the short name (without namespace)
+     * Return the short name (without namespace).
      */
     public function getShortName()
     {
@@ -166,7 +175,7 @@ class Alias
     }
 
     /**
-     * Get the namespace from the alias
+     * Get the namespace from the alias.
      *
      * @return string
      */
@@ -176,7 +185,7 @@ class Alias
     }
 
     /**
-     * Get the methods found by this Alias
+     * Get the methods found by this Alias.
      *
      * @return array|Method[]
      */
@@ -191,14 +200,40 @@ class Alias
         return $this->methods;
     }
 
+    /*
+     * Get the docblock for this alias
+     *
+     * @param string $prefix
+     * @return mixed
+     */
+    public function getDocComment($prefix = "\t\t")
+    {
+        $serializer = new DocBlockSerializer(1, $prefix);
+
+        if ($this->phpdoc) {
+            // if a class doesn't expose any DocBlock tags
+            // we can perform reflection on the class and
+            // add in the original class DocBlock
+            if (count($this->phpdoc->getTags()) === 0) {
+                $class = new ReflectionClass($this->root);
+                $this->phpdoc = new DocBlock($class->getDocComment());
+            }
+
+            $this->removeDuplicateMethodsFromPhpDoc();
+            return $serializer->getDocComment($this->phpdoc);
+        }
+
+        return '';
+    }
+
     /**
-     * Detect class returned by ::fake()
+     * Detect class returned by ::fake().
      */
     protected function detectFake()
     {
         $facade = $this->facade;
 
-        if (!method_exists($facade, 'fake')) {
+        if (! method_exists($facade, 'fake')) {
             return;
         }
 
@@ -216,13 +251,13 @@ class Alias
     }
 
     /**
-     * Detect the namespace
+     * Detect the namespace.
      */
     protected function detectNamespace()
     {
         if (strpos($this->alias, '\\')) {
-            $nsParts         = explode('\\', $this->alias);
-            $this->short     = array_pop($nsParts);
+            $nsParts = explode('\\', $this->alias);
+            $this->short = array_pop($nsParts);
             $this->namespace = implode('\\', $nsParts);
         } else {
             $this->short = $this->alias;
@@ -230,26 +265,26 @@ class Alias
     }
 
     /**
-     * Detect the extends namespace
+     * Detect the extends namespace.
      */
     protected function detectExtendsNamespace()
     {
         if (strpos($this->extends, '\\') !== false) {
-            $nsParts                = explode('\\', $this->extends);
-            $this->extendsClass     = array_pop($nsParts);
+            $nsParts = explode('\\', $this->extends);
+            $this->extendsClass = array_pop($nsParts);
             $this->extendsNamespace = implode('\\', $nsParts);
         }
     }
 
     /**
-     * Detect the class type
+     * Detect the class type.
      */
     protected function detectClassType()
     {
         //Some classes extend the facade
         if (interface_exists($this->facade)) {
             $this->classType = 'interface';
-            $this->extends   = $this->facade;
+            $this->extends = $this->facade;
         } else {
             $this->classType = 'class';
             if (class_exists($this->facade)) {
@@ -259,7 +294,7 @@ class Alias
     }
 
     /**
-     * Get the real root of a facade
+     * Get the real root of a facade.
      *
      * @return bool|string
      */
@@ -276,7 +311,7 @@ class Alias
             }
 
             //If it doesn't exist, skip it
-            if (!class_exists($root) && !interface_exists($root)) {
+            if (! class_exists($root) && ! interface_exists($root)) {
                 return;
             }
 
@@ -285,12 +320,12 @@ class Alias
             //When the database connection is not set, some classes will be skipped
         } catch (\PDOException $e) {
             $this->error(
-                "PDOException: " . $e->getMessage() .
+                'PDOException: ' . $e->getMessage() .
                 "\nPlease configure your database connection correctly, or use the sqlite memory driver (-M)." .
-                " Skipping $facade."
+                " Skipping {$facade}."
             );
         } catch (\Exception $e) {
-            $this->error("Exception: " . $e->getMessage() . "\nSkipping $facade.");
+            $this->error('Exception: ' . $e->getMessage() . "\nSkipping {$facade}.");
         }
     }
 
@@ -309,19 +344,19 @@ class Alias
     }
 
     /**
-     * Add magic methods, as defined in the configuration files
+     * Add magic methods, as defined in the configuration files.
      */
     protected function addMagicMethods()
     {
         foreach ($this->magicMethods as $magic => $real) {
-            list($className, $name) = explode('::', $real);
-            if ((!class_exists($className) && !interface_exists($className)) || !method_exists($className, $name)) {
+            [$className, $name] = explode('::', $real);
+            if ((! class_exists($className) && ! interface_exists($className)) || ! method_exists($className, $name)) {
                 continue;
             }
             $method = new \ReflectionMethod($className, $name);
-            $class  = new \ReflectionClass($className);
+            $class = new \ReflectionClass($className);
 
-            if (!in_array($magic, $this->usedMethods)) {
+            if (! in_array($magic, $this->usedMethods)) {
                 if ($class !== $this->root) {
                     $this->methods[] = new Method($method, $this->alias, $class, $magic, $this->interfaces);
                 }
@@ -337,14 +372,13 @@ class Alias
      */
     protected function detectMethods()
     {
-
         foreach ($this->classes as $class) {
             $reflection = new \ReflectionClass($class);
 
             $methods = $reflection->getMethods(\ReflectionMethod::IS_PUBLIC);
             if ($methods) {
                 foreach ($methods as $method) {
-                    if (!in_array($method->name, $this->usedMethods)) {
+                    if (! in_array($method->name, $this->usedMethods)) {
                         // Only add the methods to the output when the root is not the same as the class.
                         // And don't add the __*() methods
                         if ($this->extends !== $class && substr($method->name, 0, 2) !== '__') {
@@ -365,11 +399,11 @@ class Alias
             $traits = collect($reflection->getTraitNames());
             if ($traits->contains('Illuminate\Support\Traits\Macroable')) {
                 $properties = $reflection->getStaticProperties();
-                $macros     = isset($properties['macros']) ? $properties['macros'] : [];
+                $macros = isset($properties['macros']) ? $properties['macros'] : [];
                 foreach ($macros as $macro_name => $macro_func) {
-                    if (!in_array($macro_name, $this->usedMethods)) {
+                    if (! in_array($macro_name, $this->usedMethods)) {
                         // Add macros
-                        $this->methods[]     = new Macro(
+                        $this->methods[] = new Macro(
                             $this->getMacroFunction($macro_func),
                             $this->alias,
                             $reflection,
@@ -386,8 +420,8 @@ class Alias
     /**
      * @param $macro_func
      *
-     * @return \ReflectionFunctionAbstract
      * @throws \ReflectionException
+     * @return \ReflectionFunctionAbstract
      */
     protected function getMacroFunction($macro_func)
     {
@@ -395,44 +429,16 @@ class Alias
             return new \ReflectionMethod($macro_func[0], $macro_func[1]);
         }
 
-        if (is_object($macro_func) && is_callable($macro_func) && !$macro_func instanceof Closure) {
+        if (is_object($macro_func) && is_callable($macro_func) && ! $macro_func instanceof Closure) {
             return new \ReflectionMethod($macro_func, '__invoke');
         }
 
         return new \ReflectionFunction($macro_func);
     }
 
-    /*
-     * Get the docblock for this alias
-     *
-     * @param string $prefix
-     * @return mixed
-     */
-    public function getDocComment($prefix = "\t\t")
-    {
-        $serializer = new DocBlockSerializer(1, $prefix);
-
-        if ($this->phpdoc) {
-            // if a class doesn't expose any DocBlock tags
-            // we can perform reflection on the class and
-            // add in the original class DocBlock
-            if (count($this->phpdoc->getTags()) === 0) {
-                $class        = new ReflectionClass($this->root);
-                $this->phpdoc = new DocBlock($class->getDocComment());
-            }
-
-            $this->removeDuplicateMethodsFromPhpDoc();
-            return $serializer->getDocComment($this->phpdoc);
-        }
-
-        return '';
-    }
-
     /**
      * Removes method tags from the doc comment that already appear as functions inside the class.
      * This prevents duplicate function errors in the IDE.
-     *
-     * @return void
      */
     protected function removeDuplicateMethodsFromPhpDoc()
     {
@@ -451,7 +457,6 @@ class Alias
      * Output an error.
      *
      * @param string $string
-     * @return void
      */
     protected function error($string)
     {
