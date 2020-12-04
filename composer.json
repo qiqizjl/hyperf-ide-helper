@@ -21,7 +21,6 @@
         "php": ">=7.2",
         "ext-swoole": ">=4.4",
         "barryvdh/reflection-docblock": "^2.0",
-        "composer/composer": "^1.9.1",
         "hyperf/contract": "~1.1.0|~2.0.0",
         "hyperf/utils": "~1.1.0|~2.0.0"
     },
