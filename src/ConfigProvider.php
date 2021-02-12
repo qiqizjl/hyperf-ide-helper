@@ -22,8 +22,7 @@ class ConfigProvider
             'dependencies' => [
             ],
             'commands' => [
-                Model::class,
-                Eloquent::class,
+                Model::class
             ],
             'annotations' => [
                 'scan' => [

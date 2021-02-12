@@ -133,11 +133,11 @@ class Model extends Command
  * Copy the phpDocs from this file to the correct Model,
  * And remove them from this file, to prevent double declarations.
  *
+ * @author NaiXiaoXin  <i@nxx.email>
  * @author Barry vd. Heuvel <barryvdh@gmail.com>
  */
 \n\n";
 
-        $output .= \Naixiaoxin\HyperfIdeHelper\Eloquent::make();
 
         $hasDoctrine = interface_exists('Doctrine\DBAL\Driver');
 
@@ -201,7 +201,7 @@ class Model extends Command
 
         if (! $hasDoctrine) {
             $this->error(
-                'Warning: `"doctrine/dbal": "~2.3"` is required to load database information. ' .
+                'Warning: `"doctrine/dbal": "^3.0"` is required to load database information. ' .
                 'Please require that in your composer.json and run `composer update`.'
             );
         }
@@ -474,14 +474,6 @@ class Model extends Command
                             if ($relationObj instanceof Relation) {
                                 $relatedModel = '\\' . get_class($relationObj->getRelated());
 
-                                $relations = [
-                                    'hasManyThrough',
-                                    'belongsToMany',
-                                    'hasMany',
-                                    'morphMany',
-                                    'morphToMany',
-                                    'morphedByMany',
-                                ];
                                 if (strpos(get_class($relationObj), 'Many') !== false) {
                                     //Collection or array of models (because Collection is Arrayable)
                                     $this->setProperty(
@@ -500,7 +492,7 @@ class Model extends Command
                                     // Model isn't specified because relation is polymorphic
                                     $this->setProperty(
                                         $method,
-                                        '\Hyperf\DbConnection\Model\Model|\Eloquent',
+                                        '\Hyperf\DbConnection\Model\Model',
                                         true,
                                         null
                                     );
@@ -638,9 +630,6 @@ class Model extends Command
             $phpdoc->appendTag($tag);
         }
 
-        if ($this->write && ! $phpdoc->getTagsByName('mixin')) {
-            $phpdoc->appendTag(Tag::createInstance('@mixin \\Eloquent', $phpdoc));
-        }
 
         $serializer = new DocBlockSerializer();
         $serializer->getDocComment($phpdoc);
@@ -664,7 +653,7 @@ class Model extends Command
             }
         }
 
-        return "namespace {$namespace}{\n{$docComment}\n\t{$keyword}class {$classname} extends \\Eloquent {}\n}\n\n";
+        return "namespace {$namespace}{\n{$docComment}\n\t{$keyword}class {$classname} {}\n}\n\n";
     }
 
     /**
