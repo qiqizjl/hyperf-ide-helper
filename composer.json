@@ -21,17 +21,17 @@
         "php": ">=7.2",
         "ext-swoole": ">=4.4",
         "barryvdh/reflection-docblock": "^2.0",
-        "hyperf/contract": "~1.1.0|^2.0",
-        "hyperf/utils": "~1.1.0|^2.0",
+        "hyperf/contract": "~1.1.0|^2.0|^3.0",
+        "hyperf/utils": "~1.1.0|^2.0|^3.0",
         "composer/composer": "^1.6 || ^2",
         "doctrine/dbal": "^2.6 || ^3"
     },
     "require-dev": {
         "doctrine/dbal": "^3.0",
         "friendsofphp/php-cs-fixer": "^2.14",
-        "phpstan/phpstan": "^0.10.5",
-        "hyperf/testing": "~1.1.0|^2.0",
-        "swoft/swoole-ide-helper": "dev-master"
+        "phpstan/phpstan": "^0.10.5|^1.0",
+        "hyperf/testing": "~1.1.0|^2.0||^3.0",
+        "swoft/swoole-ide-helper": "dev-master|^4.5"
     },
     "config": {
         "sort-packages": true
